@@ -1,0 +1,255 @@
+<html>
+
+<head>
+  <title>Hộp chống bỏ quên trẻ em trên xe</title>
+  <meta name="description" content="website for monitoring the safety of childen">
+  <link rel="stylesheet" href="/stylesheets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <!-- CSS only -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-iYQeCzEYFbKjA/T2uDLTpkwGzCiq6soy8tYaI1GyVh/UjpbCx/TYkiZhlZB6+fzT" crossorigin="anonymous" />
+  <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js'></script>
+  <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css' rel='stylesheet' />
+</head>
+
+<body>
+  <div clas="container px-4">
+    <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom bcc-purle rounded">
+      <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
+        <svg class="bi me-2" width="40" height="32">
+          <use xlink:href="#bootstrap"></use>
+        </svg>
+        <span class="fs-4 bcc-purle fw-bolder fs-2">Hộp chống bỏ quên trẻ em trên xe</span>
+      </a>
+    </header>
+
+    <div class="row g-5 py-2 gap-1">
+      <div class="col rounded bg-lightRed">
+        <div class="row p-3">
+          <div class="col rounded text-center p-1 bg-lightRed2">
+            <div class="h2">Heat</div>
+            <div id="temp" class="h1">25</div>
+            <div>(C)</div>
+            <div id="temp_assessment">Good</div>
+          </div>
+          <div class="col"> <canvas class="bg-light " style="width: auto; height: 100%;" id="tempChart"> </canvas></div>
+        </div>
+      </div>
+      <div class="col rounded bg-lightGreen">
+        <div class="row p-3">
+          <div class="col rounded text-center p-1 bg-lightGreen2">
+            <div class="h2">Humidity</div>
+            <div id="humi" class="h1">50</div>
+            <div>(%)</div>
+            <div id="humi_assessment">Good</div>
+          </div>
+          <div class="col"> <canvas class="bg-light " style="width: auto; height: 100%;" id="humiChart"> </canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-5  py-2 gap-1">
+      <div class="col rounded bg-lightBlue">
+        <div class="row p-3">
+          <div class="col rounded text-center p-1 bg-lightBlue2">
+            <div class="h2">CO2</div>
+            <div id="co2" class="h1">1</div>
+            <div>(ppm)</div>
+            <div id="co2_assessment">Good</div>
+          </div>
+          <div class="col"> <canvas class="bg-light " style="width: auto; height: 100%;" id="co2Chart"> </canvas></div>
+        </div>
+      </div>
+      <div class="col rounded bg-lightYellow">
+        <div class="row p-3">
+          <div class="col rounded text-center p-1 bg-lightYellow2">
+            <div class="h2">Dust</div>
+            <div id="dust" class="h1">0.4</div>
+            <div>(ppm)</div>
+            <div id="dust_assessment">Good</div>
+          </div>
+          <div class="col"> <canvas class="bg-light " style="width: auto; height: 100%;" id="dustChart"> </canvas></div>
+        </div>
+      </div>
+    </div>
+    <div id='map'></div>
+    <div id="controlPadShow" class="pos-fixed middle-y right-0 border rounded centered-text bg-lightPurple2">
+      Control Panel
+    </div>
+    <div id="controlPad" class=" d-none position-fixed top-50 start-50 translate-middle rounded bg-lightCyan">
+      <div class="h2 text-center">
+        Bảng điều khiển
+      </div>
+
+      <div class="d-flex justify-content-center mt-3">
+        <label for="phonenumber">Set phone number: </label>
+        <input type="text" value="0123456789" id="phonenumber">
+        <button id="set_phonenumber" class="rounded bg-primary">Set</button>
+      </div>
+    </div>
+
+    <!-- normal -->
+    <script>
+      const controlPadShow = document.getElementById('controlPadShow');
+      const controlPad = document.getElementById('controlPad');
+      const phonenumber = document.getElementById('phonenumber');
+      const set_phonenumber = document.getElementById('set_phonenumber');
+
+      controlPadShow.addEventListener("click", () => {
+        console.log("click")
+        controlPad.classList.remove("d-none");
+        controlPad.classList.add("show");
+      });
+
+      //hide control pad if click outside
+      document.addEventListener("click", (e) => {
+        if (!controlPad.contains(e.target) && !controlPadShow.contains(e.target)) {
+          console.log(e.target)
+          controlPad.classList.remove("show");
+          controlPad.classList.add("d-none");
+        }
+      });
+    </script>
+    <!-- socket -->
+    <script src="../socket.io/socket.io.js"></script>
+    <script>
+      let lng, lat;
+      const temp = document.getElementById('temp');
+      const humi = document.getElementById('humi');
+      const co2 = document.getElementById('co2');
+      const dust = document.getElementById('dust');
+
+
+      var socket = io();
+      socket.on('connect', function () {
+        console.log('connected');
+      });
+
+      socket.on("message", (data) => {
+        console.log(data);
+        temp.innerHTML = data.sht_tem;
+        humi.innerHTML = data.sht_hum;
+        co2.innerHTML = data.co2;
+        dust.innerHTML = data.dust;
+        if (data.lat != 0 && data.lat)  {
+          lng = data.longitude;
+          lat = data.lat;
+          markers[0].setLngLat([lng, lat]); //currently only have 1 marker
+        }
+
+        let newData = [data.sht_tem, data.sht_hum, data.co2, data.dust]
+
+        for (let i = 0; i < charts.length; i++) {
+          addData(charts[i], newData[i])
+          if (charts[i].data.datasets[0].data.length > 30)
+            removeData(charts[i])
+        }
+      })
+
+      set_phonenumber.addEventListener("click", () => {
+        socket.emit("changePhoneNumber", phonenumber.value);
+      })
+
+    </script>
+    <!-- map -->
+    <script>
+      const geojson = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [105.79849319607226, 21.018826723196554]
+            },
+            properties: {
+              title: 'Car',
+              description: 'current location'
+            }
+          },
+        ]
+      };
+      mapboxgl.accessToken = 'pk.eyJ1Ijoib2N0b2JvdDEyMyIsImEiOiJjbDM4azYzZnUwMG4zM2psNzA0bDc3NHphIn0.CufIKD4eMfY8zxV8r-ApFg';
+      // "pk.eyJ1Ijoib2N0b2JvdDEyMyIsImEiOiJjbG56cTgzc2QxOGV5MnRvNjZobmo2cGpwIn0.ytYM-WejdZbBCHhOdpplag"
+      const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/light-v11',
+        center: [105.79832356659367, 21.01861476896958],
+        zoom: 16
+      });
+      const markers = [];
+
+      for (let i = 0; i < geojson.features.length; i++) {
+        const el = document.createElement('div');
+        el.classList.add(`marker${i + 1}`);
+        // new mapboxgl.Marker(el)
+        //   .setLngLat(feature.geometry.coordinates)
+        //   .addTo(map);
+        let marker = new mapboxgl.Marker(el)
+          .setLngLat(geojson.features[i].geometry.coordinates)
+          .setPopup(
+            new mapboxgl.Popup({ offset: 25 })
+              .setHTML(
+                `<h3>${geojson.features[i].properties.title}</h3><p>${geojson.features[i].properties.description}</p>`
+              )
+          )
+          .addTo(map);
+
+        markers.push(marker);
+      }
+
+      
+
+    </script>
+    <!-- chart -->
+    <script>
+      function chartConfigGen(label, data, color) {
+        return {
+          type: "line",
+          data: {
+            labels: [
+              60, 58, 56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28,
+              26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0,
+            ],
+            datasets: [
+              {
+                label: label,
+                data: data,
+                borderColor: color,
+                tension: 0.1,
+              },
+            ],
+            options: {
+              responsive: true,
+            },
+          },
+          options: {
+            responsive: true,
+          },
+        };
+      }
+      let labels = ["Heat", "Humidity", "CO2", "Dust"]
+      let data = [[25], [50], [1], [0.4]]
+      let colors = ["red", "green", "blue", "yellow",]
+      let chartids = ["tempChart", "humiChart", "co2Chart", "dustChart"]
+      const chartConfigs = [];
+      const charts = []
+      for (let i = 0; i < labels.length; i++) {
+        chartConfigs.push(chartConfigGen(labels[i], data[i], colors[i]))
+        charts.push(new Chart(document.getElementById(chartids[i]).getContext("2d"), chartConfigs[i]));
+      }
+
+      function addData(chart, newData) {
+        chart.data.datasets[0].data.push(newData);
+        chart.update();
+      }
+
+      function removeData(chart) {
+        chart.data.datasets[0].data.shift();
+        chart.update();
+      }
+    </script>
+
+  </div>
+</body>
+
+</html>
